@@ -19,8 +19,8 @@ services:
           - ozone-proxy
           - proxy
     ports:
-      - "${PROXY_PUBLIC_PORT}:80"
-      - "${PROXY_PUBLIC_PORT_TLS}:443"
+      - "${PROXY_PUBLIC_PORT:-80}:80"
+      - "${PROXY_PUBLIC_PORT_TLS:-443}:443"
       - "8069:8069"
       - "8081:8081"
     volumes:
@@ -33,7 +33,7 @@ services:
 
   # Bahmni Appointments
   appointments:
-    image: mekomsolutions/appointments
+    image: mekomsolutions/appointments:latest
     healthcheck:
       test:
         - CMD
@@ -46,10 +46,9 @@ services:
         aliases:
           - appointments-1
   env-substitution:
-    image: mekomsolutions/env-substitution
+    image:  mekomsolutions/env-substitution
     environment:
       - ODOO_PUBLIC_URL=${HOST_URL}:8069
-      - SENAITE_PUBLIC_URL=${HOST_URL}:8081
       - SUPERSET_PUBLIC_URL=${HOST_URL}:8088
       - OPENMRS_PUBLIC_URL=${HOST_URL}
     volumes:
@@ -62,7 +61,7 @@ services:
 
   # OpenMRS
   openmrs:
-    image: openmrs/openmrs-reference-application-3-backend:${O3_BACKEND_TAG:-nightly}
+    image: mekomsolutions/openmrs:latest
     depends_on:
       mysql:
         condition: service_started
@@ -71,13 +70,13 @@ services:
     ports:
       - "8080:8080"
     environment:
-      OMRS_CONFIG_MODULE_WEB_ADMIN: "true"
-      OMRS_CONFIG_AUTO_UPDATE_DATABASE: "true"
-      OMRS_CONFIG_CREATE_TABLES: "true"
-      OMRS_CONFIG_CONNECTION_SERVER: mysql
-      OMRS_CONFIG_CONNECTION_DATABASE: openmrs
-      OMRS_CONFIG_CONNECTION_USERNAME: ${OPENMRS_DB_USER:-openmrs}
-      OMRS_CONFIG_CONNECTION_PASSWORD: ${OPENMRS_DB_PASSWORD:-openmrs}
+      MODULE_WEB_ADMIN: "true"
+      DB_AUTO_UPDATE: "true"
+      DB_CREATE_TABLES: "true"
+      DB_HOST: ${OPENMRS_DB_HOST}
+      DB_DATABASE: openmrs
+      DB_USERNAME: ${OPENMRS_DB_USER}
+      DB_PASSWORD: ${OPENMRS_DB_PASSWORD}
     healthcheck:
       test:
         - CMD
@@ -91,12 +90,12 @@ services:
           - openmrs
           - openmrs-tomcat
     volumes:
-      - "openmrs-data:/openmrs/data"
-      - "${OPENMRS_OWAS_PATH:-openmrs-owas}:/openmrs/distribution/openmrs_owas/"
-      - "${OPENMRS_CORE_PATH}:/openmrs/distribution/openmrs_core/"
-      - "${OPENMRS_MODULES_PATH:-openmrs-modules}:/openmrs/distribution/openmrs_modules/"
-      - "${OPENMRS_CONFIG_PATH:-openmrs-config}:/openmrs/distribution/openmrs_config/"
-      - "${OPENMRS_CONFIG_CHECKSUMS_PATH:-openmrs-config-checksums}:/openmrs/data/configuration_checksums"
+      - "openmrs-data:/usr/local/tomcat/.OpenMRS/"
+      - "${OPENMRS_OWAS_PATH:-openmrs-owas}:/usr/local/tomcat/.OpenMRS/owa/"
+      - "${OPENMRS_CORE_PATH}:/usr/local/tomcat/webapps"
+      - "${OPENMRS_MODULES_PATH:-openmrs-modules}:/usr/local/tomcat/.OpenMRS/modules/"
+      - "${OPENMRS_CONFIG_PATH:-openmrs-config}:/usr/local/tomcat/.OpenMRS/configuration/"
+      - "${OPENMRS_CONFIG_CHECKSUMS_PATH:-openmrs-config-checksums}:/usr/local/tomcat/.OpenMRS/configuration_checksums/"
       - "${OZONE_CONFIG_PATH:-ozone-config}/openmrs-properties:/etc/properties/"
 
   # MySQL
@@ -186,7 +185,7 @@ services:
 
   # OpenMRS 3 Microfrontends
   frontend:
-    image: openmrs/openmrs-reference-application-3-frontend:${O3_FRONTEND_TAG:-nightly}
+    image: openmrs/openmrs-reference-application-3-frontend:${TAG:-demo}
     environment:
       SPA_PATH: /openmrs/spa
       API_URL: /openmrs
@@ -201,7 +200,7 @@ services:
         aliases:
           - frontend
   redis:
-    image: redis:7
+    image: redis
     restart: always
     volumes:
       - redis:/data
@@ -281,24 +280,8 @@ services:
       ozone:
         aliases:
           - superset-init
-  senaite:
-    environment: 
-      - SITE=${SITE}
-      - ADMIN_USER=${ADMIN_USER}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-    image: mekomsolutions/senaite:latest
-    volumes:
-    - ${SENAITE_CONFIG_PATH}/data:/data/importdata/senaite
-    - senaite-filestorage:/data/filestorage
-    - senaite-blobstorage:/data/blobstorage
-    networks:
-      ozone:
-        aliases:
-          - senaite
-    depends_on: 
-      env-substitution:
-        condition: service_completed_successfully
-  eip-client: 
+
+  eip_client: 
     image: mekomsolutions/eip-client
     volumes:
       - "${EIP_PATH:-eipapp}/config:/config"
@@ -318,8 +301,6 @@ services:
       - OPENMRS_DB_USER=${OPENMRS_DB_USER}
       - OPENMRS_DB_PASSWORD=${OPENMRS_DB_PASSWORD}
       - OPENMRS_USER=${OPENMRS_USER}
-      - SENAITE_USERNAME=${ADMIN_USER}
-      - SENAITE_PASSWORD=${ADMIN_PASSWORD}
       - OPENMRS_PASSWORD=${OPENMRS_PASSWORD}
       - MYSQL_ADMIN_USER=root
       - MYSQL_ADMIN_USER_PASSWORD=${MYSQL_ROOT_PASSWORD}
@@ -331,13 +312,12 @@ services:
       - OPENMRS_IDENTIFIER_TYPE_UUD=${OPENMRS_IDENTIFIER_TYPE_UUD}
       - DB_EVENT_DESTINATIONS=${DB_EVENT_DESTINATIONS}
       - CREATE_CUSTOMER_IF_NOT_EXIST=${CREATE_CUSTOMER_IF_NOT_EXIST}
-      - SENAITE_URL=http://senaite:8080
       - OPENMRS_URL=http://openmrs:8080
       - ODOO_URL=http://odoo:8069
     networks:
       ozone:
         aliases:
-          - eip-client
+          - eip_client
     depends_on: 
       env-substitution:
         condition: service_completed_successfully
@@ -345,11 +325,143 @@ services:
         condition: service_started
       odoo:
         condition: service_started
-      senaite:
-        condition: service_started
       
     ports:
     - "8083:8083"
+
+# OpenELIS SETUP
+  openhim-core:
+    container_name: openhim-core
+    hostname: openhim-core
+    image: jembi/openhim-core:latest
+    restart: unless-stopped
+    environment:
+      mongo_url: "mongodb://mongo-db/openhim"
+      mongo_atnaUrl: "mongodb://mongo-db/openhim"
+      NODE_ENV: "development"
+  
+    ports:
+    #   - 5000
+      - 5001:5001
+      - 8085:8080
+
+
+  openhim-console:
+    container_name: openhim-console
+    hostname: openhim-console
+    image: jembi/openhim-console:latest
+    restart: unless-stopped
+    volumes:
+      - ./openelis/openhim/console.json:/usr/share/nginx/html/config/default.json
+    healthcheck:
+      test: "curl -sS http://openhim-console || exit 1"
+      interval: 10s
+      timeout: 60s
+      retries: 3
+    ports: 
+       - 3000:80
+
+
+  # Loads Default OpenHIM Config
+  openhim-config:
+    container_name: openhim-config
+    image: ghcr.io/i-tech-uw/openhim-config:v0.0.0
+    volumes:
+      - ./openelis/openhim/initial-config.json:/app/test-openhim-config.json
+
+  mongo-db:
+    container_name: mongo-db
+    image: mongo:3.4
+    volumes:
+      - /data/db
+    restart: unless-stopped
+ 
+  ####
+  # OpenELIS
+  ####
+  certs:
+    container_name: oe-certs
+    image: ghcr.io/i-tech-uw/certgen:main
+    restart: always
+    environment:
+      - KEYSTORE_PW="kspass"
+      - TRUSTSTORE_PW="tspass"
+    volumes:
+      - cert-volume:/etc/openelis-global
+      - keys-vol:/etc/ssl/private/
+      - certs-vol:/etc/ssl/certs/
+
+
+  database:
+    container_name: openelisglobal-database
+    image: postgres:9.5
+    ports:
+       - "15432:5432"
+    restart: always
+    env_file:
+      - ./openelis/database/database.env
+    volumes:
+      # preserves the database between containers
+      - db-data:/var/lib/postgresql/data
+        # files here will run on install
+      - ./openelis/database/dbInit:/docker-entrypoint-initdb.d
+
+    healthcheck:
+      test: ["CMD", "pg_isready", "-q", "-d", "clinlims", "-U", "clinlims"]
+      timeout: 45s
+      interval: 10s
+      retries: 10
+
+  oe.openelis.org:
+    container_name: openelisglobal-webapp
+    image: ghcr.io/i-tech-uw/openelis-global-2:develop
+    depends_on:
+      - database
+    ports:
+       - "8443:8443"
+    restart: always
+    environment:
+      - TZ=Africa/Nairobi
+        # context.xml doesn't seem to be able to pick up environment variables directly, so we are passing them in as CATALINA_OPTS
+      - CATALINA_OPTS= -Ddatasource.url=jdbc:postgresql://database:5432/clinlims -Ddatasource.username=clinlims -Ddatasource.password=clinlims
+    volumes:
+      - cert-volume:/etc/openelis-global
+      # -  openelis-plugins-data:/var/lib/openelis-global/plugins
+      - ./openelis/tomcat/oe_server.xml:/usr/local/tomcat/conf/server.xml
+    secrets:
+      - source: datasource.password
+      - source: common.properties
+
+
+  fhir.openelis.org:
+    container_name: external-fhir-api
+    image: hapiproject/hapi:v5.5.1
+    # ports:
+    # - "8081:8080"
+    restart: always
+    environment:
+      - hapi.fhir.auto_create_placeholder_reference_targets=true
+      - hapi.fhir.allow_placeholder_references=true
+      - hapi.fhir.allow_external_references=true
+  
+
+  fhir.openelis.org.remote:
+    container_name: openelis-remote-source
+    image: hapiproject/hapi:v5.5.1
+    # ports:
+    #   - "8081:8080"
+    restart: always
+    environment:
+      - hapi.fhir.auto_create_placeholder_reference_targets=true
+      - hapi.fhir.allow_placeholder_references=true
+      - hapi.fhir.allow_external_references=true
+  
+
+secrets:
+  datasource.password:
+    file: ./openelis/properties/datasource.password
+  common.properties:
+    file: ./openelis/properties/common.properties
 
     
 version: "3.7"
@@ -371,11 +483,12 @@ volumes:
   odoo-config: ~
   odoo-filestore: ~
   ozone-reports-data: ~
-  senaite-data: ~
   eip-home: ~
   redis: ~
-  senaite-filestorage: ~
-  senaite-blobstorage: ~
   odoo-checksums: ~
+  db-data:
+  cert-volume:
+  certs-vol:
+  keys-vol:
 networks:
   ozone:
