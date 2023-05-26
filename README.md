@@ -42,6 +42,7 @@ Ozone FOSS requires you to log into each component separately:
 | Superset          | http://localhost:8088         | admin    | password |
 |OpenHIM            | http://localhost:3000/        |root@openhim.org | admin|
 
+
 :bulb: **Did you know?** Ozone Pro comes with single sign-on (SSO) and all its integration layer is secured with OAuth2.
 
 ## 3. Analytics in Ozone FOSS
